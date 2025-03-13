@@ -1,0 +1,15 @@
+{
+  "rabbit_version": "3.10",
+  "queues": [
+    {"name": "order_created", "vhost": "/", "durable": true},
+    {"name": "order_updated", "vhost": "/", "durable": true},
+    {"name": "order_approved", "vhost": "/", "durable": true},
+    {"name": "order_cancelled_by_partner", "vhost": "/", "durable": true},
+    {"name": "order_confirmed", "vhost": "/", "durable": true},
+    {"name": "order_cancelled", "vhost": "/", "durable": true},
+    {"name": "order_ready_for_payment", "vhost": "/", "durable": true},
+    {"name": "order_paid", "vhost": "/", "durable": true},
+    {"name": "order_not_paid", "vhost": "/", "durable": true},
+    {"name": "order_closed", "vhost": "/", "durable": true}
+  ]
+}

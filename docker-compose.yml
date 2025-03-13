@@ -1,0 +1,39 @@
+version: "3.10"
+
+x-rabbit-variable: &rabbit-variables
+  RABBITMQ_DEFAULT_USER: guest
+  RABBITMQ_DEFAULT_PASS: guest
+
+x-db-variables: &db-variables
+  POSTGRES_USER: db_user
+  POSTGRES_PASSWORD: db_pass
+  POSTGRES_DB: queue_db
+  POSTGRES_PORT: 5432
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq_broker
+    restart: always
+    environment:
+      <<: *rabbit-variables
+      RABBITMQ_LOAD_DEFINITIONS: "/etc/rabbitmq/definitions.json"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json
+
+  db-service-queue:
+    image: postgres:15-alpine
+    environment: *db-variables
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data/"
+    ports:
+      - "5432:5432"
+    expose:
+      - 5432
+
+
+volumes:
+  postgres_data:
