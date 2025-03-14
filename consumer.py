@@ -28,7 +28,7 @@ DB_CONFIG = {
     "port": os.environ.get("DB_PORT"),
 }
 
-def get_db_connection():
+def create_db_table():
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         logging.info("Connected to the database")
@@ -46,6 +46,15 @@ def get_db_connection():
             conn.commit()
             logging.info("Table 'notifications' checked/created")
 
+        return conn
+    except Exception as e:
+        logging.error(f"Database connection error: {e}")
+        return None
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        logging.info("Connected to the database")
         return conn
     except Exception as e:
         logging.error(f"Database connection error: {e}")
@@ -109,5 +118,5 @@ def main() -> None:
         logging.error(f"Unexpected error in main: {e}")
 
 if __name__ == "__main__":
-    get_db_connection()
+    create_db_table()
     main()
