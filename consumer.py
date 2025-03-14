@@ -1,9 +1,11 @@
+import os
 import logging
 import json
 from typing import TYPE_CHECKING
 
 import psycopg2
 from pika import ConnectionParameters, BlockingConnection
+from pika.exceptions import AMQPConnectionError
 
 
 if TYPE_CHECKING:
@@ -11,34 +13,47 @@ if TYPE_CHECKING:
     from pika.spec import Basic, BasicProperties
 
 logging.basicConfig(
-    level=logging.INFO,  # Можно поменять на DEBUG для отладки
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.StreamHandler(),  # Вывод в консоль
-        logging.FileHandler("consumer.log", encoding="utf-8")  # Лог-файл
+        logging.StreamHandler(),
+        logging.FileHandler("consumer.log", encoding="utf-8")
     ],
 )
-
 DB_CONFIG = {
-    "dbname": "queue_db",
-    "user": "db_user",
-    "password": "db_pass",
-    "host": "localhost",
-    "port": 5432,
+    "dbname": os.environ.get("DB_NAME"),
+    "user": os.environ.get("DB_USER"),
+    "password": os.environ.get("DB_PASSWORD"),
+    "host": os.environ.get("DB_HOST"),
+    "port": os.environ.get("DB_PORT"),
 }
 
 def get_db_connection():
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         logging.info("Connected to the database")
+
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    received_at TIMESTAMP DEFAULT NOW(),
+                    tour_id TEXT NOT NULL,
+                    status TEXT
+                )"""
+            )
+            conn.commit()
+            logging.info("Table 'notifications' checked/created")
+
         return conn
     except Exception as e:
         logging.error(f"Database connection error: {e}")
         return None
 
 connection_params: ConnectionParameters = ConnectionParameters(
-    host="localhost",
-    port=5672,
+    host=os.environ.get("RABBIT_HOST"),
+    port=os.environ.get("RABBIT_PORT"),
 )
 
 def callback(
@@ -51,13 +66,12 @@ def callback(
         data = json.loads(body.decode("utf-8"))
         event_type = data.get("event_type")
         tour_id = data.get("tour_id")
-        status = data.get("order_status")  # Или другой статус, если нужно
+        status = data.get("order_status")
 
         if not event_type or not tour_id:
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
 
-        # Подключаемся к БД
         conn = get_db_connection()
         if conn:
             try:
@@ -80,29 +94,20 @@ def callback(
 
 
 def main() -> None:
-    with BlockingConnection(connection_params) as connection:
-        with connection.channel() as channel:
-            queues: list[str] = [
-                "order_created",
-                "order_updated",
-                "order_approved",
-                "order_cancelled_by_partner",
-                "order_confirmed",
-                "order_cancelled",
-                "order_ready_for_payment",
-                "order_paid",
-                "order_not_paid",
-                "order_closed",
-            ]
-            for queue in queues:
+    try:
+        with BlockingConnection(connection_params) as connection:
+            with connection.channel() as channel:
                 channel.basic_consume(
-                    queue=queue,
+                    queue="notifications",
                     on_message_callback=callback,
                 )
-
-            logging.info("Waiting for messages")
-            channel.start_consuming()
-
+                logging.info("Waiting for messages")
+                channel.start_consuming()
+    except AMQPConnectionError as e:
+        logging.error(f"Failed to connect to RabbitMQ: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error in main: {e}")
 
 if __name__ == "__main__":
+    get_db_connection()
     main()
